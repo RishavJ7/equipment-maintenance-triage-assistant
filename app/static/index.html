@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maintenance Triage Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e8ecef;--panel:#fff;--ink:#16212b;--mute:#5a6874;--line:#cfd6dc;--accent:#1f5f8b;--accent-ink:#fff;
+--alarm:#b3261e;--alarm-bg:#fbe9e7;--warn:#9a5b00;--warn-bg:#fff1d6;--ok:#1b7443;--ok-bg:#e3f4ea;--obs:#51708a;--hyp:#8a6d00;--conf:#1b7443}
+@media (prefers-color-scheme:dark){:root{--bg:#10171d;--panel:#18222b;--ink:#e6ecf1;--mute:#93a2af;--line:#2c3a46;--accent:#5aa9dd;--accent-ink:#0b1620;
+--alarm:#ff8a80;--alarm-bg:#3a1f1d;--warn:#ffc266;--warn-bg:#3a2d12;--ok:#6fd49b;--ok-bg:#16301f;--obs:#8fb0c9;--hyp:#e0c05a;--conf:#6fd49b}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#14202b;color:#e9eff4;padding:14px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.2px}
+nav{display:flex;gap:4px;margin-left:auto}
+nav button{background:transparent;color:#c5d1da;border:1px solid transparent;padding:6px 14px;border-radius:4px;font:inherit;cursor:pointer}
+nav button[aria-selected=true]{background:#e9eff4;color:#14202b;font-weight:600}
+.pill{font-size:12px;padding:2px 8px;border-radius:99px;background:#26394a;color:#c5d1da}
+.pill.on{background:#1d4d33;color:#bff0d3}.pill.off{background:#4a2d17;color:#ffd7ad}
+main{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:18px;align-items:start}
+main.hist{grid-template-columns:minmax(260px,320px) 1fr}
+@media(max-width:860px){main,main.hist{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px}
+.card+.card,.stack>*+*{margin-top:14px}
+h2{font-size:16px;margin:0 0 10px;font-weight:600}h3{font-size:14px;margin:14px 0 6px;font-weight:600}
+label{display:block;font-size:13px;font-weight:500;margin:12px 0 4px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:7px 9px}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+textarea{min-height:70px;resize:vertical}
+button.btn{font:inherit;font-weight:500;padding:8px 14px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+button.btn.ghost{background:transparent;color:var(--accent)}button.btn.danger{background:var(--alarm);border-color:var(--alarm);color:#fff}
+button.btn:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.row>.fixed{flex:0 0 auto}
+.sensor-row{display:grid;grid-template-columns:1fr 90px 28px;gap:6px;margin-top:6px}
+.sensor-row button{border:0;background:none;color:var(--mute);cursor:pointer;font-size:18px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:3px 9px;border-radius:99px;cursor:pointer}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:3px;white-space:nowrap}
+.b-alarm{background:var(--alarm-bg);color:var(--alarm)}.b-warning{background:var(--warn-bg);color:var(--warn)}
+.b-normal,.b-approved{background:var(--ok-bg);color:var(--ok)}.b-rejected{background:var(--alarm-bg);color:var(--alarm)}
+.b-muted{background:var(--bg);color:var(--mute)}
+.sec{border-left:4px solid var(--obs);padding-left:14px}
+.sec.hyp{border-left:4px dashed var(--hyp)}.sec.conf{border-left:4px solid var(--conf)}
+.sec .tag{font-size:12px;color:var(--mute);margin:-6px 0 8px}
+.banner{border:1px solid var(--warn);background:var(--warn-bg);color:var(--ink);border-radius:6px;padding:12px 14px}
+.banner.err{border-color:var(--alarm);background:var(--alarm-bg)}
+.banner strong{display:block}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:500;color:var(--mute);font-size:13px}.scroll{overflow-x:auto}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px}
+.item{padding:8px 0;border-bottom:1px solid var(--line)}.item:last-child{border-bottom:0}
+.cite{font:12px "IBM Plex Mono",monospace;border:1px solid var(--line);background:var(--bg);color:var(--accent);border-radius:3px;padding:0 6px;margin-right:4px;cursor:pointer}
+.cite.none{color:var(--alarm);cursor:default}
+.evid{margin:6px 0;padding:8px 10px;background:var(--bg);border-radius:4px;font-size:13px;white-space:pre-wrap}
+.muted{color:var(--mute);font-size:13px}.top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.top h2{margin:0}.grow{flex:1}
+ul.plain{margin:4px 0;padding-left:20px}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--alarm);color:#fff;padding:10px 16px;border-radius:6px;max-width:90vw;z-index:9}
+.empty{padding:36px 16px;text-align:center;color:var(--mute)}
+.hlist button{display:block;width:100%;text-align:left;font:inherit;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 4px;cursor:pointer;color:var(--ink)}
+.gauge{width:64px;height:7px;background:var(--line);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:6px}
+.gauge-bar{height:100%;border-radius:4px}
+.btn-link{background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;font-size:12px;text-decoration:underline;padding:0 4px;margin-left:4px}
+@media (prefers-reduced-motion:no-preference){.banner{animation:in .2s ease-out}@keyframes in{from{opacity:.4}to{opacity:1}}}
+@media print {
+  header, nav, #left, #f, .banner, .chips, #findBox form, .row button, #retry, .toast, .btn-link { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  main { display: block !important; max-width: 100% !important; padding: 0 !important; }
+  .card { border: 1px solid #ccc !important; box-shadow: none !important; page-break-inside: avoid; margin-bottom: 12px !important; }
+  #woBox { display: block !important; margin-top: 10px !important; }
+  #woF input, #woF textarea, #woF select { border: 1px solid #eee !important; background: #fff !important; color: #000 !important; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Maintenance Triage Assistant</h1>
+  <span id="aiPill" class="pill">AI: checking…</span>
+  <nav role="tablist" aria-label="Views">
+    <button role="tab" id="tabNew" aria-selected="true">New report</button>
+    <button role="tab" id="tabHist" aria-selected="false">History</button>
+  </nav>
+</header>
+<main id="main">
+  <section id="left"></section>
+  <section id="right" aria-live="polite"></section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let META = null, CUR = null, VIEW = "new";
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined});
+  if (!r.ok) {
+    let m = r.statusText; try { const j = await r.json(); m = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
+    throw new Error(m);
+  }
+  return r.json();
+}
+function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 5000); }
+const wrap = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
+
+/* ---------- scenarios ---------- */
+const SCENARIOS = {
+  "Compressor tripping": {t:"compressor", id:"C-102", issue:"Compressor trips and makes a loud grinding noise after restart.",
+    events:"Tripped twice yesterday afternoon\nLoud grinding noise started after the second restart\nOil topped up last week",
+    s:[["discharge_temp",125],["vibration",8.2],["oil_pressure",2.4]]},
+  "Conflicting sensors": {t:"compressor", id:"C-205", issue:"Discharge temperature is normal but the unit keeps shutting down on high temp.",
+    events:"Shut down 3 times this shift", s:[["discharge_temp",134],["discharge_temp",98],["motor_current",88]]},
+  "Pump, no sensors": {t:"pump", id:"P-201", issue:"Pump is making a crackling gravel noise and flow seems low.",
+    events:"Suction tank level was low this morning\nNoise gets worse when suction valve is throttled", s:[]},
+  "Off-topic (no manual match)": {t:"conveyor", id:"B-7", issue:"Cafeteria coffee machine near the line is broken again.", events:"", s:[]},
+  "Safety keyword": {t:"motor", id:"M-330", issue:"Burning smell and smoke coming from the motor terminal box.",
+    events:"Operator saw sparks at start-up", s:[["winding_temp",150]]}
+};
+
+/* ---------- form ---------- */
+function renderForm() {
+  const types = Object.keys(META.types);
+  $("#left").innerHTML = `<form class="card" id="f" autocomplete="off">
+    <h2>Report an equipment problem</h2>
+    <label for="t">Equipment type</label>
+    <select id="t">${types.map(t => `<option value="${t}">${t[0].toUpperCase() + t.slice(1)}</option>`).join("")}</select>
+    <label for="eid">Equipment identifier</label>
+    <input id="eid" required placeholder="e.g. C-102" list="eqs" maxlength="40">
+    <datalist id="eqs"></datalist>
+    <label for="issue">Issue description</label>
+    <textarea id="issue" required minlength="5" placeholder="What is wrong? What did you see, hear or smell?"></textarea>
+    <label for="events">Recent operating events <span class="muted">(one per line)</span></label>
+    <textarea id="events" placeholder="Tripped twice yesterday&#10;Noise after restart"></textarea>
+    <label>Sensor readings <span class="muted">(optional)</span></label>
+    <div id="sensors"></div>
+    <div class="row" style="margin-top:8px"><button type="button" class="btn ghost fixed" id="addS">Add reading</button></div>
+    <div style="margin-top:16px"><button class="btn" id="go" style="width:100%">Analyse report</button></div>
+    <h3>Try a demo scenario</h3><div class="chips">${Object.keys(SCENARIOS).map(k => `<button type="button" data-sc="${esc(k)}">${esc(k)}</button>`).join("")}</div>
+  </form>`;
+  $("#addS").onclick = () => addSensor();
+  $("#t").onchange = () => { $("#sensors").innerHTML = ""; };
+  $("#f").onsubmit = wrap(submit);
+  document.querySelectorAll("[data-sc]").forEach(b => b.onclick = () => loadScenario(SCENARIOS[b.dataset.sc]));
+  api("/api/equipment").then(l => $("#eqs").innerHTML = l.map(e => `<option value="${esc(e.equipment_id)}">`).join("")).catch(() => {});
+}
+function addSensor(name = "", val = "") {
+  const opts = Object.entries(META.types[$("#t").value]).map(([k, v]) => `<option value="${k}" ${k === name ? "selected" : ""}>${esc(v.label)} (${esc(v.unit)})</option>`).join("");
+  const d = document.createElement("div"); d.className = "sensor-row";
+  d.innerHTML = `<select aria-label="Sensor">${opts}</select><input type="number" step="any" aria-label="Value" placeholder="value" value="${val}"><button type="button" aria-label="Remove reading">×</button>`;
+  d.querySelector("button").onclick = () => d.remove();
+  $("#sensors").appendChild(d);
+}
+function loadScenario(s) {
+  $("#t").value = s.t; $("#eid").value = s.id; $("#issue").value = s.issue; $("#events").value = s.events;
+  $("#sensors").innerHTML = ""; s.s.forEach(([k, v]) => addSensor(k, v));
+}
+async function submit(e) {
+  e.preventDefault();
+  const body = {equipment_type: $("#t").value, equipment_id: $("#eid").value, issue: $("#issue").value, events: $("#events").value,
+    sensors: [...document.querySelectorAll(".sensor-row")].map(r => ({sensor: r.querySelector("select").value, value: r.querySelector("input").value === "" ? null : Number(r.querySelector("input").value)}))};
+  const b = $("#go"); b.disabled = true; b.textContent = "Analysing… (AI step can take up to 45s)";
+  $("#right").innerHTML = `<div class="card empty">Running threshold checks, retrieving manual sections and asking the AI…</div>`;
+  try { CUR = await api("/api/reports", {method: "POST", body}); renderReport(); }
+  catch (err) { $("#right").innerHTML = ""; throw err; }
+  finally { b.disabled = false; b.textContent = "Analyse report"; }
+}
+
+/* ---------- report ---------- */
+const statusBadge = s => `<span class="badge b-${s === "alarm" ? "alarm" : s === "warning" ? "warning" : s === "normal" ? "normal" : "muted"}">${esc(s.replace("_", " "))}</span>`;
+const prioBadge = p => p ? `<span class="badge b-${p === "Critical" || p === "High" ? "alarm" : p === "Medium" ? "warning" : "normal"}">${esc(p)}</span>` : `<span class="badge b-muted">not proposed</span>`;
+function cites(ids, ev) {
+  if (!ids || !ids.length) return `<span class="cite none" title="No supporting evidence cited in report or manuals">no evidence cited</span>`;
+  return ids.map(i => `<button type="button" class="cite" data-ev="${esc(i)}" aria-expanded="false" title="Click to view evidence citation [${esc(i)}]">${esc(i)}</button>`).join("");
+}
+
+function sensorGauge(i) {
+  if (i.used_value === null || !i.limits) return '';
+  const val = i.used_value, {warn, alarm, direction} = i.limits;
+  const color = i.status === "alarm" ? "var(--alarm)" : i.status === "warning" ? "var(--warn)" : "var(--ok)";
+  let pct = 30;
+  if (direction === "high") {
+    const span = alarm * 1.25;
+    pct = Math.max(10, Math.min(100, Math.round((val / span) * 100)));
+  } else {
+    const span = warn * 1.5;
+    pct = Math.max(10, Math.min(100, Math.round(((span - val) / span) * 100)));
+  }
+  return `<span class="gauge" title="Reading: ${esc(val)} ${esc(i.unit)} | Warn: ${esc(warn)} | Alarm: ${esc(alarm)}"><span class="gauge-bar" style="width:${pct}%;background:${color};display:block"></span></span>`;
+}
+
+function toggleSnippet(idx) {
+  const snip = document.getElementById(`snip-${idx}`);
+  if (!snip) return;
+  const dots = snip.querySelector(".dots");
+  const more = snip.querySelector(".more-text");
+  const btn = snip.querySelector(".btn-link");
+  if (!more || !btn) return;
+  const isHidden = more.hidden;
+  more.hidden = !isHidden;
+  if (dots) dots.hidden = isHidden;
+  btn.textContent = isHidden ? "Show less" : "Read full section";
+}
+
+function renderReport() {
+  const r = CUR, a = r.analysis, ev = a.evidence, ai = a.ai, res = ai.result, wo = r.work_order;
+  const items = a.rules.items;
+  let h = `<div class="stack">`;
+  h += `<div class="card top"><h2>${esc(r.equipment_type)} ${esc(r.equipment_id)}</h2><span class="muted">Report #${r.id}</span><span class="grow"></span>
+        <span>Sensor checks ${statusBadge(a.rules.overall)}</span><span>Priority ${prioBadge(a.priority.final)}</span></div>`;
+
+  if (ai.status !== "ok") {
+    const why = {unavailable: "AI is not configured", timeout: "AI timed out", error: "AI request failed", invalid_output: "AI output rejected"}[ai.status] || "AI failed";
+    h += `<div class="banner ${ai.status === "unavailable" ? "" : "err"}"><strong>${why}. No AI suggestions below.</strong>${esc(ai.message)}
+      The threshold checks, safety flags and a plain template work order are still available.
+      <div style="margin-top:8px"><button class="btn ghost" id="retry">Retry AI analysis</button></div></div>`;
+  }
+  if (a.retrieval.status !== "ok") h += `<div class="banner err"><strong>${a.retrieval.status === "failed" ? "Manual retrieval failed" : "No manual match found"}</strong>${esc(a.retrieval.message)}</div>`;
+  if (a.safety_flags.length) h += `<div class="banner err"><strong>Safety keywords reported: ${esc(a.safety_flags.join(", "))}</strong>Priority is forced to Critical. Stop the equipment and isolate it before inspecting.</div>`;
+
+  // Observations
+  h += `<div class="card sec"><h2>Observations</h2><div class="tag">What was reported or measured. Deterministic facts, not interpreted.</div>
+    <div class="item"><span class="muted">Issue</span> <button type="button" class="cite" data-ev="I1">I1</button><br>${esc(r.issue)}</div>`;
+  if (a.events.length) h += `<div class="item"><span class="muted">Operating events</span><ul class="plain">${a.events.map((e, i) => `<li>${esc(e)} <button type="button" class="cite" data-ev="E${i + 1}">E${i + 1}</button></li>`).join("")}</ul></div>`;
+  h += `<h3>Threshold checks (fixed rules, no AI)</h3><div class="scroll"><table><thead><tr><th>Sensor</th><th>Reading & Level</th><th>Status</th><th>Detail</th></tr></thead><tbody>
+    ${items.map(i => `<tr><td>${esc(i.label)} <button type="button" class="cite" data-ev="${i.id}">${i.id}</button></td>
+      <td class="mono">${sensorGauge(i)}${i.values.length ? esc(i.values.join(" / ")) + " " + esc(i.unit) : "—"}</td>
+      <td>${statusBadge(i.status)}${i.conflict ? ' <span class="badge b-warning">conflict</span>' : ""}</td><td class="muted">${esc(i.note)}</td></tr>`).join("")}</tbody></table></div>`;
+  const notes = [...a.rules.data_quality_notes, ...a.text_conflicts];
+  if (notes.length) h += `<h3>Data quality</h3><ul class="plain">${notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>`;
+  h += `</div>`;
+
+  // Manual
+  h += `<div class="card sec"><h2>Retrieved manual sections</h2><div class="tag">Matched via BM25 against issue description and sensor alarms.</div>`;
+  const ms = Object.entries(ev).filter(([k]) => k.startsWith("M"));
+  h += ms.length ? ms.map(([k, v], idx) => {
+    const isLong = v.text.length > 200;
+    const shortTxt = isLong ? v.text.slice(0, 200) : v.text;
+    const restTxt = isLong ? v.text.slice(200) : "";
+    return `<div class="item" id="man-${idx}"><button type="button" class="cite" data-ev="${k}">${k}</button> <strong>${esc(v.label)}</strong>
+      <div class="muted" id="snip-${idx}">${esc(shortTxt)}${isLong ? `<span class="dots">…</span><span class="more-text" hidden>${esc(restTxt)}</span><button type="button" class="btn-link" onclick="toggleSnippet(${idx})">Read full section</button>` : ""}</div></div>`;
+  }).join("") : `<div class="muted">Nothing relevant retrieved.</div>`;
+  h += `</div>`;
+
+  // AI suggestions
+  if (res) {
+    h += `<div class="card sec hyp"><h2>Possible causes</h2><div class="tag">Hypotheses suggested by the AI. Not confirmed. Confidence is grounded in citations (uncited items are downgraded to low).</div>
+      ${res.possible_causes.length ? res.possible_causes.map(c => `<div class="item"><strong>${esc(c.cause)}</strong> <span class="badge b-muted" title="Confidence evaluated from citation evidence">${esc(c.confidence)} confidence</span>
+        <div>${esc(c.rationale)}</div><div>${cites(c.citations)}</div></div>`).join("") : `<div class="muted">The AI did not propose any cause from the evidence given.</div>`}</div>`;
+    h += `<div class="card sec hyp"><h2>Follow-up questions</h2>${res.follow_up_questions.map(q => `<div class="item">${esc(q.question)}<div class="muted">${esc(q.why || "")}</div><div>${cites(q.citations)}</div></div>`).join("") || '<div class="muted">None.</div>'}</div>`;
+    h += `<div class="card sec hyp"><h2>Suggested inspection steps</h2>${res.inspection_steps.map(s => `<div class="item">${esc(s.step)}<div>${cites(s.citations)}</div></div>`).join("") || '<div class="muted">None.</div>'}</div>`;
+    h += `<div class="card sec hyp"><h2>Proposed priority</h2><p>AI proposed ${prioBadge(a.priority.ai)}. ${esc(res.priority.reason)} ${cites(res.priority.citations)}</p>`;
+    if (a.priority.escalated) h += `<div class="banner"><strong>Raised to ${esc(a.priority.final)} by fixed rules</strong>${esc(a.priority.floor_reasons.join(" "))}</div>`;
+    if (res.warnings && res.warnings.length) h += `<p class="muted">${esc(res.warnings.join(" "))}</p>`;
+    h += `</div>`;
+  } else if (a.priority.floor) {
+    h += `<div class="card sec"><h2>Minimum priority from fixed rules</h2><p>${prioBadge(a.priority.floor)} ${esc(a.priority.floor_reasons.join(" "))}</p></div>`;
+  }
+
+  h += `<div id="woBox"></div><div id="findBox"></div></div>`;
+  $("#right").innerHTML = h;
+  renderWO(); renderFindings();
+  if ($("#retry")) {
+    $("#retry").onclick = wrap(async () => {
+      const btn = $("#retry");
+      btn.disabled = true;
+      btn.textContent = "Retrying…";
+      try {
+        CUR = await api(`/api/reports/${CUR.id}/retry-ai`, {method: "POST"});
+        renderReport();
+      } finally {
+        const b = $("#retry");
+        if (b) { b.disabled = false; b.textContent = "Retry AI analysis"; }
+      }
+    });
+  }
+}
+
+function renderWO() {
+  const wo = CUR.work_order; if (!wo) return;
+  const d = wo.draft, locked = wo.status !== "draft", L = ["Low", "Medium", "High", "Critical"];
+  const lines = v => (v || []).join("\n");
+  $("#woBox").innerHTML = `<div class="card"><div class="top"><h2>Draft work order</h2>
+    <span class="badge b-${wo.status === "draft" ? "muted" : wo.status}">${esc(wo.status)}</span>
+    <span class="badge b-muted">${wo.source === "ai" ? "AI-generated draft" : "Template (no AI)"}${d.edited ? ", edited" : ""}</span>
+    <span class="grow"></span>
+    <button type="button" class="btn ghost fixed" id="printWO" title="Print work order for technicians">🖨️ Print / Export Work Order</button>
+    </div>
+    ${wo.source === "template" ? '<p class="muted">The AI did not produce this draft. It only restates the report and the fixed-rule alerts.</p>' : ""}
+    <form id="woF"><fieldset ${locked ? "disabled" : ""} style="border:0;padding:0;margin:0">
+    <label>Title</label><input name="title" value="${esc(d.title)}">
+    <label>Description</label><textarea name="description">${esc(d.description)}</textarea>
+    <label>Priority</label><select name="priority"><option value="">Not set</option>${L.map(p => `<option ${p === d.priority ? "selected" : ""}>${p}</option>`).join("")}</select>
+    <label>Recommended actions <span class="muted">(one per line)</span></label><textarea name="recommended_actions">${esc(lines(d.recommended_actions))}</textarea>
+    <label>Parts and tools <span class="muted">(one per line)</span></label><textarea name="parts_tools">${esc(lines(d.parts_tools))}</textarea>
+    <label>Safety notes</label><textarea name="safety_notes">${esc(d.safety_notes)}</textarea></fieldset></form>
+    ${d.citations && d.citations.length ? `<p class="muted">Evidence: ${cites(d.citations)}</p>` : ""}
+    ${locked ? `<p class="muted">${esc(wo.status)} ${esc(wo.updated_at.slice(0, 16).replace("T", " "))} UTC${wo.decision_note ? ". Note: " + esc(wo.decision_note) : ""}</p>` :
+    `<div class="row" style="margin-top:12px"><button class="btn ghost" id="save">Save edits</button><button class="btn" id="approve">Approve</button><button class="btn danger" id="reject">Reject</button></div>
+     <div id="rej" hidden style="margin-top:8px"><label for="rnote">Reason for rejecting</label><input id="rnote"><div style="margin-top:8px"><button class="btn danger" id="rok">Confirm rejection</button></div></div>`}</div>`;
+
+  if ($("#printWO")) $("#printWO").onclick = () => window.print();
+  if (locked) return;
+  const read = () => { const f = new FormData($("#woF")), o = Object.fromEntries(f);
+    ["recommended_actions", "parts_tools"].forEach(k => o[k] = o[k].split("\n").map(s => s.trim()).filter(Boolean)); return o; };
+  const save = async () => { const w = await api(`/api/work-orders/${wo.id}`, {method: "PATCH", body: {draft: read()}}); CUR.work_order = w; return w; };
+  $("#save").onclick = wrap(async () => { await save(); renderWO(); });
+  $("#approve").onclick = wrap(async () => { await save(); CUR.work_order = await api(`/api/work-orders/${wo.id}/decision`, {method: "POST", body: {decision: "approve"}}); renderWO(); });
+  $("#reject").onclick = () => { $("#rej").hidden = false; $("#rnote").focus(); };
+  $("#rok").onclick = wrap(async () => { CUR.work_order = await api(`/api/work-orders/${wo.id}/decision`, {method: "POST", body: {decision: "reject", note: $("#rnote").value}}); renderWO(); });
+}
+
+function renderFindings() {
+  const f = CUR.findings;
+  $("#findBox").innerHTML = `<div class="card sec conf"><h2>Confirmed findings</h2><div class="tag">Recorded by a technician after inspection. The AI cannot add to this list.</div>
+    ${f.map(x => `<div class="item">${esc(x.text)}<div class="muted">${esc(x.recorded_by)}, ${esc(x.created_at.slice(0, 16).replace("T", " "))} UTC</div></div>`).join("") || '<div class="muted">No confirmed findings yet.</div>'}
+    <form id="ff" style="margin-top:10px"><label for="ft">Add a confirmed finding</label><textarea id="ft" placeholder="What did you verify on site?"></textarea>
+    <div class="row" style="margin-top:8px"><input id="fby" placeholder="Your name" value="${esc(localStorage.getItem("tech") || "")}"><button class="btn fixed">Save finding</button></div></form></div>`;
+  $("#ff").onsubmit = wrap(async e => { e.preventDefault(); localStorage.setItem("tech", $("#fby").value);
+    CUR.findings = await api(`/api/reports/${CUR.id}/findings`, {method: "POST", body: {text: $("#ft").value, recorded_by: $("#fby").value || "technician"}}); renderFindings(); });
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest(".cite[data-ev]"); if (!b || !CUR) return;
+  const host = b.closest(".item") || b.closest("p") || b.parentElement, id = b.dataset.ev, ex = host.querySelector(`.evid[data-for="${id}"]`);
+  host.querySelectorAll(".evid").forEach(x => x.remove());
+  if (ex) { b.setAttribute("aria-expanded", "false"); return; }
+  const v = CUR.analysis.evidence[id]; if (!v) return;
+  const d = document.createElement("div"); d.className = "evid"; d.dataset.for = id; d.textContent = `${id} · ${v.label}\n${v.text}`;
+  host.appendChild(d); b.setAttribute("aria-expanded", "true");
+});
+
+/* ---------- history ---------- */
+async function renderHistory(sel) {
+  $("#left").innerHTML = `<div class="card"><h2>Equipment</h2><form id="hs" class="row"><input id="hq" placeholder="Equipment ID" value="${esc(sel || "")}"><button class="btn fixed">Show</button></form>
+    <div class="hlist" id="hl" style="margin-top:8px"></div></div>`;
+  $("#hs").onsubmit = wrap(async e => { e.preventDefault(); if ($("#hq").value.trim()) await showHistory($("#hq").value.trim()); });
+  const list = await api("/api/equipment");
+  $("#hl").innerHTML = list.map(e => `<button data-id="${esc(e.equipment_id)}"><strong>${esc(e.equipment_id)}</strong> <span class="muted">${esc(e.equipment_type)}, ${e.n} report${e.n > 1 ? "s" : ""}</span></button>`).join("") || '<div class="muted">No equipment yet.</div>';
+  document.querySelectorAll("#hl button").forEach(b => b.onclick = wrap(() => showHistory(b.dataset.id)));
+  if (sel) await showHistory(sel); else $("#right").innerHTML = `<div class="card empty">Pick a piece of equipment to see its issue and maintenance history.</div>`;
+}
+async function showHistory(eid) {
+  const h = await api(`/api/equipment/${encodeURIComponent(eid)}/history`);
+  $("#hq").value = eid;
+  $("#right").innerHTML = `<div class="stack"><div class="card"><h2>History for ${esc(eid)}</h2></div>` + (h.length ? h.map(x => `<div class="card">
+    <div class="top"><strong>Report #${x.id}</strong><span class="muted">${esc(x.created_at.slice(0, 16).replace("T", " "))} UTC</span><span class="grow"></span>
+    ${x.priority ? prioBadge(x.priority) : ""}${x.rule_overall ? statusBadge(x.rule_overall) : ""}</div>
+    <p><span class="muted">Observation:</span> ${esc(x.issue)}</p>
+    ${x.work_order ? `<p><span class="muted">Work order:</span> ${esc(x.work_order.draft.title)} <span class="badge b-${x.work_order.status === "draft" ? "muted" : x.work_order.status}">${esc(x.work_order.status)}</span>${x.work_order.decision_note ? `<br><span class="muted">${esc(x.work_order.decision_note)}</span>` : ""}</p>` : ""}
+    ${x.findings.length ? `<div class="sec conf"><span class="muted">Confirmed findings</span>${x.findings.map(f => `<div>${esc(f.text)} <span class="muted">(${esc(f.recorded_by)})</span></div>`).join("")}</div>` : ""}
+    <button class="btn ghost" data-open="${x.id}" style="margin-top:8px">Open full report</button></div>`).join("") : `<div class="card empty">No reports for “${esc(eid)}”.</div>`) + `</div>`;
+  document.querySelectorAll("[data-open]").forEach(b => b.onclick = wrap(async () => { CUR = await api(`/api/reports/${b.dataset.open}`); setView("new", true); renderReport(); }));
+}
+
+/* ---------- shell ---------- */
+function setView(v, keepRight) {
+  VIEW = v; $("#main").className = v === "hist" ? "hist" : "";
+  $("#tabNew").setAttribute("aria-selected", v === "new"); $("#tabHist").setAttribute("aria-selected", v === "hist");
+  if (v === "new") { renderForm(); if (!keepRight) $("#right").innerHTML = CUR ? "" : `<div class="card empty">Fill in the form or pick a demo scenario. Results appear here.</div>`; if (CUR && !keepRight) renderReport(); }
+  else wrap(() => renderHistory())();
+}
+$("#tabNew").onclick = () => setView("new"); $("#tabHist").onclick = () => setView("hist");
+(async () => {
+  try { META = await api("/api/meta"); } catch (e) { toast("Cannot reach the server: " + e.message); return; }
+  const p = $("#aiPill"); p.textContent = META.ai_configured ? "AI: configured" : "AI: not configured"; p.className = "pill " + (META.ai_configured ? "on" : "off");
+  setView("new");
+})();
+</script>
+</body>
+</html>
