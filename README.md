@@ -1,5 +1,7 @@
 # Equipment Maintenance Triage Assistant
 
+> 🌐 **Live Deployed Application**: [https://equipment-maintenance-triage-assistant-2m04.onrender.com](https://equipment-maintenance-triage-assistant-2m04.onrender.com)
+
 A technician reports an equipment problem. The app runs **fixed threshold rules**, retrieves **manual sections**, and asks an **LLM** (Groq or Claude) for *suggestions*: possible causes, follow-up questions, inspection steps, a priority and a draft work order. A human technician edits, approves or rejects the draft. The AI never confirms anything.
 
 ## Run locally
